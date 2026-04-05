@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polymarket Analyzer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #07070f; color: #e0e0ff; font-family: monospace; padding: 20px; min-height: 100vh; }
+h1 { text-align: center; font-size: 24px; font-weight: 900; background: linear-gradient(90deg, #6644ff, #00ccff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+.subtitle { text-align: center; color: #444; font-size: 12px; margin-bottom: 24px; }
+.powered { text-align: center; font-size: 10px; letter-spacing: 4px; color: #6644ff; margin-bottom: 8px; }
+.tabs { display: flex; background: #0d0d1a; border-radius: 10px; padding: 3px; margin-bottom: 20px; }
+.tab { flex: 1; padding: 9px 0; border: none; border-radius: 8px; background: transparent; color: #555; font-weight: 700; font-size: 12px; cursor: pointer; font-family: monospace; }
+.tab.active { background: linear-gradient(90deg, #6644ff, #9933ff); color: #fff; }
+.panel { display: none; }
+.panel.active { display: block; }
+.card { background: #0d0d1a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+.card-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.category { font-size: 11px; color: #6644ff; }
+.price { font-size: 18px; font-weight: 800; color: #00ff88; }
+.card p { color: #e0e0ff; font-size: 13px; margin-bottom: 12px; line-height: 1.4; }
+label { color: #666; font-size: 11px; letter-spacing: 1px; display: block; margin-bottom: 6px; margin-top: 14px; }
+textarea, input[type=number] { width: 100%; background: #080812; border: 1px solid #2a2a4a; border-radius: 8px; padding: 12px; color: #e0e0ff; font-size: 14px; font-family: monospace; }
+textarea { resize: vertical; min-height: 70px; }
+.btn { width: 100%; padding: 11px 0; border-radius: 9px; border: none; background: linear-gradient(90deg, #6644ff, #9933ff); color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; font-family: monospace; margin-top: 14px; }
+.btn:disabled { background: #2a2a4a; cursor: not-allowed; }
+.result { border-radius: 12px; padding: 16px; margin-top: 10px; }
+.result-header { display: flex; justify-content: space-between; margin-bottom: 14px; }
+.result-label { color: #666; font-size: 11px; }
+.verdict { font-weight: 800; font-size: 12px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat { background: #ffffff08; border-radius: 8px; padding: 10px 8px; text-align: center; }
+.stat-label { color: #444; font-size: 9px; margin-bottom: 4px; }
+.stat-val { font-weight: 800; font-size: 16px; }
+.analysis { color: #c0c0e0; font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+.kelly-box { background: #6644ff11; border: 1px solid #6644ff33; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #9977ff; }
+.error-box { background: #1a0808; border: 1px solid #ff444433; border-radius: 10px; padding: 14px; margin-top: 10px; color: #ff8888; font-size: 12px; line-height: 1.6; }
+.debug { margin-top: 20px; background: #1a0808; border: 1px solid #ff444433; border-radius: 10px; padding: 14px; font-size: 11px; color: #ff8888; word-break: break-all; line-height: 1.6; }
+.footer { text-align: center; margin-top: 30px; color: #2a2a2a; font-size: 10px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<div class="powered">POWERED BY CLAUDE AI + WEB SEARCH</div>
+<h1>POLYMARKET ANALYZER</h1>
+<p class="subtitle">Análisis en tiempo real 🔍</p>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('samples')">📋 Ejemplos</button>
+  <button class="tab" onclick="switchTab('custom')">✏️ Mi mercado</button>
+</div>
+
+<div id="samples" class="panel active">
+  <div id="sample-markets"></div>
+</div>
+
+<div id="custom" class="panel">
+  <div class="card">
+    <label>PREGUNTA DEL MERCADO</label>
+    <textarea id="customQ" placeholder="Ej: ¿Ganará España el Mundial 2026?"></textarea>
+    <label>PRECIO EN POLYMARKET (0-100)</label>
+    <input type="number" id="customP" placeholder="Ej: 35">
+    <button class="btn" id="customBtn" onclick="analyzeCustom()">⚡ Analizar con IA</button>
+  </div>
+  <div id="custom-result"></div>
+</div>
+
+<div id="debug" class="debug" style="display:none"></div>
+<p class="footer">⚠️ SOLO EDUCATIVO — NO ES CONSEJO FINANCIERO</p>
+
+<script>
+const SAMPLES = [
+  { id: "m1", title: "Will Michigan win the NCAA tournament 2026?", odds: 35, category: "🏀 NCAA" },
+  { id: "m2", title: "Will Arizona win the NCAA tournament 2026?", odds: 34, category: "🏀 NCAA" },
+  { id: "m3", title: "Will Illinois win the NCAA tournament 2026?", odds: 17, category: "🏀 NCAA" },
+];
+
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", ["samples","custom"][i] === tab));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById(tab).classList.add("active");
+}
+
+function renderSamples() {
+  const container = document.getElementById("sample-markets");
+  container.innerHTML = SAMPLES.map(m => `
+    <div class="card">
+      <div class="card-header">
+        <span class="category">${m.category}</span>
+        <span class="price">${m.odds}¢</span>
+      </div>
+      <p>${m.title}</p>
+      <button class="btn" id="btn-${m.id}" onclick="analyze('${m.id}','${m.title}',${m.odds})">⚡ Analizar con IA</button>
+      <div id="result-${m.id}"></div>
+    </div>
+  `).join("");
+}
+
+async function analyze(id, title, odds) {
+  const btn = document.getElementById("btn-" + id);
+  const resultDiv = document.getElementById("result-" + id);
+  btn.disabled = true;
+  btn.textContent = "🔍 Buscando en internet...";
+  document.getElementById("debug").style.display = "none";
+
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ market: title, odds })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(JSON.stringify(data.error));
+    resultDiv.innerHTML = renderResult(data, odds);
+  } catch(e) {
+    resultDiv.innerHTML = `<div class="error-box">⚠️ ${e.message}</div>`;
+    const dbg = document.getElementById("debug");
+    dbg.style.display = "block";
+    dbg.innerHTML = "<strong>🔍 Debug:</strong> " + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "⚡ Analizar con IA";
+}
+
+async function analyzeCustom() {
+  const title = document.getElementById("customQ").value.trim();
+  const odds = parseFloat(document.getElementById("customP").value);
+  if (!title || !odds) return;
+  const btn = document.getElementById("customBtn");
+  const resultDiv = document.getElementById("custom-result");
+  btn.disabled = true;
+  btn.textContent = "🔍 Buscando en internet...";
+
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ market: title, odds })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(JSON.stringify(data.error));
+    resultDiv.innerHTML = renderResult(data, odds);
+  } catch(e) {
+    resultDiv.innerHTML = `<div class="error-box">⚠️ ${e.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "⚡ Analizar con IA";
+}
+
+function renderResult(data, marketOdds) {
+  const edge = data.prob - marketOdds;
+  const color = edge > 8 ? "#00ff88" : edge > 3 ? "#ffcc00" : edge < -5 ? "#ff4466" : "#888";
+  const verdict = edge > 8 ? "🟢 APUESTA RECOMENDADA" : edge > 3 ? "🟡 EDGE MODERADO" : edge < -5 ? "🔴 SOBREVALUADO" : "⚪ SIN EDGE";
+  return `
+    <div class="result" style="backg
